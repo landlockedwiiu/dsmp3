@@ -56,7 +56,7 @@ static void scan_music(void) {
 // Decoding
 // ---------------------------------------------------------------
 static mp3dec_t dec;
-static FILE *fp = NULL;
+static FILE *mp3file = NULL;
  
 static unsigned char inbuf[16 * 1024];   // raw MP3 bytes read from the SD card
 static int  inbytes = 0;                 // how many valid bytes are in inbuf
@@ -79,7 +79,7 @@ static void refill(void) {
     if (inpos > 0 && inbytes > 0) memmove(inbuf, inbuf + inpos, inbytes);
     inpos = 0;
     if (!eof && inbytes < (int)sizeof(inbuf)) {
-        size_t n = fread(inbuf + inbytes, 1, sizeof(inbuf) - inbytes, fp);
+        size_t n = fread(inbuf + inbytes, 1, sizeof(inbuf) - inbytes, mp3file);
         if (n == 0) eof = true;
         inbytes += (int)n;
     }
@@ -138,7 +138,7 @@ static mm_word on_stream(mm_word length, mm_addr dest, mm_stream_formats format)
  
 static void stop_track(void) {
     if (playing) { mmStreamClose(); playing = false; }
-    if (fp)      { fclose(fp); fp = NULL; }
+    if (mp3file)      { fclose(mp3file); mp3file = NULL; }
     paused = false;
     finished = false;
     current = -1;
@@ -150,8 +150,8 @@ static bool start_track(int index) {
     char path[NAME_LEN + 16];
     snprintf(path, sizeof(path), "/music/%s", names[index]);
  
-    fp = fopen(path, "rb");
-    if (!fp) return false;
+    mp3file = fopen(path, "rb");
+    if (!mp3file) return false;
  
     mp3dec_init(&dec);
     inbytes = inpos = 0;
@@ -159,7 +159,7 @@ static bool start_track(int index) {
     pcm_count = pcm_pos = 0;
  
     // decode one frame first so we know the sample rate and channel count
-    if (!decode_next()) { fclose(fp); fp = NULL; return false; }
+    if (!decode_next()) { fclose(mp3file); mp3file = NULL; return false; }
     pcm_pos = 0;   // play that first frame too
  
     mm_stream s;
@@ -216,7 +216,6 @@ int main(void) {
     sys.mod_count   = 0;
     sys.samp_count  = 0;
     sys.mem_bank    = 0;
-    sys.fifo_channel = FIFO_MAXMOD;
     mmInit(&sys);
  
     scan_music();
@@ -224,7 +223,7 @@ int main(void) {
     int sel = 0;
     draw(sel);
  
-    while (1) {
+    while (pmMainLoop()) {
         swiWaitForVBlank();
         scanKeys();
         int down = keysDown();
